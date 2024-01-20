@@ -1,17 +1,19 @@
 package kodong.spotimate.authentication.service;
 
+import kodong.spotimate.authentication.domain.Members;
 import kodong.spotimate.authentication.dto.SpotifyToken;
+import kodong.spotimate.authentication.dto.SpotifyUserProfile;
 import kodong.spotimate.authentication.dto.UserAuthorizeResponse;
 import kodong.spotimate.authentication.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
+
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -19,9 +21,47 @@ public class MemberService {
 
     private final MemberRepository memberRepository;
     private static final String TOKEN_ENDPOINT = "https://accounts.spotify.com/api/token";
-    String clientId = "";
-    String clientSecret = "";
+    private final String userProfileEndpoint = "https://api.spotify.com/v1/me";
 
+    @Value("${clientId}")
+    String clientId;
+    @Value("${clientSecret}")
+    String clientSecret;
+
+    /**
+     * 현재 사용자 정보 DB에 있는지 확인 후 없으면 DB에 저장
+     * @param spotifyUserProfile
+     * @return 저장 후 DB에서의 id
+     */
+    public Long addUserDatatoDB(SpotifyUserProfile spotifyUserProfile) {
+        String userId = spotifyUserProfile.getId();
+
+        // 데이터베이스에서 기존 멤버 조회
+        Optional<Members> existingMember = memberRepository.findByUserId(userId);
+
+        // 이미 저장된 멤버가 있으면 바로 ID 반환
+        if (existingMember.isPresent()) {
+            return existingMember.get().getId();
+        }
+
+        // 새 멤버 생성
+        Members newMember = new Members();
+        newMember.setUserId(userId);
+        newMember.setEmail(spotifyUserProfile.getEmail());
+        newMember.setDisplayName(spotifyUserProfile.getDisplayName());
+
+        // 새 멤버를 데이터베이스에 저장
+        Members savedMember = memberRepository.save(newMember);
+
+        // 새로 저장된 멤버의 ID 반환
+        return savedMember.getId();
+    }
+
+    /**
+     * spotify로 token 얻기위한 요청 보냄
+     * @param userAuthorizeResponse
+     * @return token얻음
+     */
     public SpotifyToken requestToken(UserAuthorizeResponse userAuthorizeResponse) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
@@ -41,7 +81,23 @@ public class MemberService {
     }
 
     /**
-     * 권한제공에 동의했는제 확인
+     * httpSession을 통해 해당 사용자의 profile 받아옴.
+     * @param spotifyToken
+     * @return
      */
+    public SpotifyUserProfile getUserProfile(SpotifyToken spotifyToken) {
+        RestTemplate restTemplate = new RestTemplate();
 
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(spotifyToken.getAccess_token());
+        HttpEntity<String> entity = new HttpEntity<>("parameters", headers);
+
+        ResponseEntity<SpotifyUserProfile> response = restTemplate.exchange(
+                userProfileEndpoint,
+                HttpMethod.GET,
+                entity,
+                SpotifyUserProfile.class);
+
+        return response.getBody();
+    }
 }

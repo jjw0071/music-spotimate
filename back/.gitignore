@@ -35,3 +35,6 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### Authentication 설정 ###
+authentication.properties
