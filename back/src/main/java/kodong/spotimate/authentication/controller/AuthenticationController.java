@@ -81,16 +81,27 @@ public class AuthenticationController {
     }
 
     @GetMapping("/api")
-    public ResponseEntity<?> apiRequest(){
-        //TODO JSESSION으로 httpSession 찾기
+    public ResponseEntity<Map<String, Object>> apiRequest(HttpServletRequest request){
+        //JSESSION으로 httpSession 찾기
+        HttpSession session = request.getSession();
+        SpotifyToken currentToken = (SpotifyToken) session.getAttribute("SpotifyToken");
+        Map<String, Object> response = new HashMap<>();
 
-        //TODO 유효성 확인하는 Service 함수 호출
+        if(currentToken == null){
+            //TODO 로그인 상태가 아닐 때 처리
+            response.put("IsLoggedIn",false);
+            return ResponseEntity.ok(response);
 
-        //TODO 토큰 갱신 및 httpSession update
+        }
 
-        //TODO 필요한 api 호출하는 Service 함수 호출
+        response.put("IsLoggedIn",true);
 
-        return ResponseEntity.ok("OK");
+        //유효성 확인 후 만료되었으면 refresh
+        SpotifyToken updatedToken = memberService.updateTokenIfNeeded(currentToken);
+        session.setAttribute("SpotifyToken", updatedToken);
+        response.put("ContainsValidToken", true);
+
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/get/user/data")

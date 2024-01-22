@@ -100,4 +100,40 @@ public class MemberService {
 
         return response.getBody();
     }
+
+    public SpotifyToken updateTokenIfNeeded(SpotifyToken currentToken) {
+        // 토큰 유효성 확인 및 필요시 업데이트
+        if (!isTokenExpired(currentToken)) {
+            return refreshToken(currentToken);
+        }
+        return currentToken;
+    }
+
+    private SpotifyToken refreshToken(SpotifyToken currentToken) {
+        // TODO token refresh하는 로직 구현
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        headers.setBasicAuth(clientId, clientSecret); // 기본 인증 헤더 설정
+
+        MultiValueMap<String, String> map = new LinkedMultiValueMap<>();
+        map.add("grant_type", "refresh_token");
+        map.add("refresh_token", currentToken.getRefresh_token());
+
+        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(map, headers);
+
+        RestTemplate restTemplate = new RestTemplate();
+        ResponseEntity<SpotifyToken> response = restTemplate.postForEntity(TOKEN_ENDPOINT, request, SpotifyToken.class);
+
+        SpotifyToken newToken = response.getBody();
+        if (newToken != null && newToken.getRefresh_token() == null) {
+            // 새 토큰에 refresh_token이 없는 경우, 기존의 refresh_token을 유지
+            newToken.setRefresh_token(currentToken.getRefresh_token());
+        }
+
+        return newToken;
+    }
+
+    private boolean isTokenExpired(SpotifyToken currentToken) {
+        return currentToken.isExpired();
+    }
 }
